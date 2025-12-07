@@ -4,7 +4,10 @@
 
   export let data: PageData;
 
-  let files: OutputFile[] = data.outputs.files ?? [];
+  const onlyJpg = (items: OutputFile[] = []) =>
+    items.filter((file) => file.name?.toLowerCase().endsWith('.jpg'));
+
+  let files: OutputFile[] = onlyJpg(data.outputs.files);
   let loading = false;
   let errorMsg: string | null = null;
 
@@ -30,7 +33,7 @@
         throw new Error(detail || 'Gagal mengambil daftar output');
       }
       const data = (await response.json()) as { files: OutputFile[] };
-      files = data.files ?? [];
+      files = onlyJpg(data.files);
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : 'Gagal memuat output';
     } finally {

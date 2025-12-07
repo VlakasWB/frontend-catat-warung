@@ -41,9 +41,29 @@
   };
 
   const parseNumberFromText = (text: string): number | null => {
-    const cleaned = text.replace(/[^\d.,-]/g, '').replace(',', '.').trim();
-    if (!cleaned) return null;
-    const num = Number(cleaned);
+    if (!text) return null;
+
+    // strip currency labels and minus signs; keep only digits and separators
+    const withoutCurrency = text.replace(/rp|idr/gi, '').replace(/-/g, '');
+    const keepSeparators = withoutCurrency.replace(/[^\d.,]/g, '');
+    if (!keepSeparators) return null;
+
+    const hasDot = keepSeparators.includes('.');
+    const hasComma = keepSeparators.includes(',');
+    let normalized = keepSeparators;
+
+    if (hasDot && hasComma) {
+      // assume dot = thousand, comma = decimal
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else if (hasComma) {
+      // comma at the end with 1-2 digits -> decimal, otherwise thousand separator
+      normalized = /,\d{1,2}$/.test(normalized) ? normalized.replace(',', '.') : normalized.replace(/,/g, '');
+    } else if (hasDot) {
+      // dot at the end with 1-2 digits -> decimal, otherwise thousand separator
+      normalized = /\.\d{1,2}$/.test(normalized) ? normalized : normalized.replace(/\./g, '');
+    }
+
+    const num = Number(normalized);
     return Number.isFinite(num) ? num : null;
   };
 
@@ -227,7 +247,7 @@
         {#if detections.length === 0}
           <p class="text-muted text-sm">Tidak ada deteksi terstruktur.</p>
         {:else}
-          <div class="detects-horizontal">
+          <div class="detects-grid">
             {#each detections as det}
               <div
                 class="detect-card"
@@ -498,6 +518,7 @@
     display: grid;
     grid-template-columns: 1fr 1.2fr;
     gap: 16px;
+    overflow-x: hidden;
   }
   .detect-column,
   .rows-column {
@@ -506,13 +527,10 @@
     border-radius: 12px;
     padding: 12px;
   }
-  .detects-horizontal {
+  .detects-grid {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(220px, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 12px;
-    overflow-x: auto;
-    padding-bottom: 6px;
   }
   .detect-card {
     border: 1px solid var(--border);
