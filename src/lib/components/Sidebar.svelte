@@ -5,7 +5,8 @@
   const links = [
     { href: '/scan', label: 'Scan' },
     { href: '/review', label: 'Review' },
-    { href: '/dashboard', label: 'Dashboard' }
+    { href: '/dashboard', label: 'Dashboard' },
+    { href: '/outputs', label: 'Outputs' }
   ];
 
   const activePath = derived(page, ($page) => $page.url.pathname);
