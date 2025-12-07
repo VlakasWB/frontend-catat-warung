@@ -33,10 +33,15 @@ export const load: PageServerLoad = async () => {
     };
   } catch (err) {
     console.error('Failed to load dashboard data', err);
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const needsMigration = /Transaction\.phone|Transaction\.address|no such column/i.test(rawMsg);
+    const friendly = needsMigration
+      ? 'Skema database belum sesuai. Jalankan prisma migrate/dev push atau tambahkan kolom phone/address sesuai schema.'
+      : rawMsg || 'Gagal memuat dashboard';
     return {
       summary: { today: 0, month: 0, count: 0 },
       latest: [],
-      error: err instanceof Error ? err.message : 'Gagal memuat dashboard'
+      error: friendly
     };
   }
 };
