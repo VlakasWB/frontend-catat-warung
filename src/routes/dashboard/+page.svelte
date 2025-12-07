@@ -15,7 +15,7 @@
 
   let editingId: number | null = null;
   let editingRow: EditRow | null = null;
-  let rows = data.latest.map((t) => ({
+  let rows = (data.latest ?? []).map((t) => ({
     ...t,
     date: t.date.slice(0, 10)
   }));
@@ -105,6 +105,13 @@
 </script>
 
 <div class="space-y-8">
+  {#if data.error}
+    <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+      <p class="text-sm font-semibold">Gagal memuat dashboard</p>
+      <p class="text-sm">{data.error}</p>
+    </div>
+  {/if}
+
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="card">
       <p class="text-sm text-muted">Omzet hari ini</p>

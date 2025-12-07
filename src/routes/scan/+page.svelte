@@ -16,6 +16,10 @@
   const detectionsPerPage = 6;
   let pagedDetections: Detection[] = [];
   let totalDetectionPages = 1;
+  let rowPage = 0;
+  const rowsPerPage = 4;
+  let pagedRows: ParsedRow[] = [];
+  let totalRowPages = 1;
   const MIN_DETECTION_SCORE = 0.35;
   const noisySnippets = ['hormat kami', 'oms'];
 
@@ -25,6 +29,9 @@
     detectionPage * detectionsPerPage,
     detectionPage * detectionsPerPage + detectionsPerPage
   );
+  $: totalRowPages = Math.max(1, Math.ceil((rows?.length ?? 0) / rowsPerPage));
+  $: rowPage = Math.min(rowPage, Math.max(0, totalRowPages - 1));
+  $: pagedRows = rows.slice(rowPage * rowsPerPage, rowPage * rowsPerPage + rowsPerPage);
 
   const nextDetectionPage = () => {
     detectionPage = Math.min(totalDetectionPages - 1, detectionPage + 1);
@@ -32,6 +39,14 @@
 
   const prevDetectionPage = () => {
     detectionPage = Math.max(0, detectionPage - 1);
+  };
+
+  const nextRowPage = () => {
+    rowPage = Math.min(totalRowPages - 1, rowPage + 1);
+  };
+
+  const prevRowPage = () => {
+    rowPage = Math.max(0, rowPage - 1);
   };
 
   if (typeof sessionStorage !== 'undefined') {
@@ -169,6 +184,7 @@
   const addRow = () => {
     rows = [...rows, defaultRow()];
     activeRow = rows.length - 1;
+    rowPage = Math.floor(activeRow / rowsPerPage);
   };
 
   const cleanDetections = (items: Detection[] = []) =>
@@ -187,9 +203,12 @@
     if (rows.length === 0) {
       rows = [defaultRow()];
       activeRow = 0;
+      rowPage = 0;
       return;
     }
     if (activeRow >= rows.length) activeRow = Math.max(0, rows.length - 1);
+    rowPage = Math.min(rowPage, Math.max(0, Math.ceil(rows.length / rowsPerPage) - 1));
+    rowPage = Math.floor(activeRow / rowsPerPage);
   };
 
   const submit = async (event: Event) => {
@@ -224,6 +243,7 @@
       if (rows.length === 0) rows = [defaultRow()];
       activeRow = 0;
       detectionPage = 0;
+      rowPage = 0;
       tryAutofillDate(filteredDetections);
       sessionStorage.setItem('scanResult', JSON.stringify({ ...data, detections: filteredDetections }));
     } catch (err) {
@@ -459,35 +479,62 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="text-xl font-semibold text-fg">Baris yang akan disimpan</h3>
-            <p class="text-sm text-muted">Klik baris untuk aktif, semua input tinggi 48px.</p>
+            <p class="text-sm text-muted">Klik baris untuk aktif, semua input tinggi 48px. Navigasi pakai halaman.</p>
           </div>
-          <button
-            class="h-11 rounded-2xl border border-border bg-white px-4 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
-            type="button"
-            on:click={addRow}
-          >
-            Tambah baris
-          </button>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-fg">
+              Hal {rows.length === 0 ? 0 : rowPage + 1}/{totalRowPages}
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="h-10 rounded-2xl border border-border bg-white px-3 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60"
+                type="button"
+                on:click={prevRowPage}
+                disabled={rowPage === 0}
+              >
+                Sebelumnya
+              </button>
+              <button
+                class="h-10 rounded-2xl border border-border bg-white px-3 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60"
+                type="button"
+                on:click={nextRowPage}
+                disabled={rowPage >= totalRowPages - 1}
+              >
+                Selanjutnya
+              </button>
+              <button
+                class="h-10 rounded-2xl border border-border bg-white px-3 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                type="button"
+                on:click={addRow}
+              >
+                Tambah baris
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="flex flex-col gap-4">
-          {#each rows as row, idx}
+          {#each pagedRows as row, idx}
             <div
-              class={`rounded-2xl border bg-card p-4 shadow-soft transition hover:border-brand/40 focus-within:ring-2 focus-within:ring-brand/40 ${idx === activeRow ? 'border-brand' : 'border-border'}`}
+              class={`rounded-2xl border bg-card p-4 shadow-soft transition hover:border-brand/40 focus-within:ring-2 focus-within:ring-brand/40 ${rowPage * rowsPerPage + idx === activeRow ? 'border-brand' : 'border-border'}`}
               role="button"
               tabindex="0"
-              on:click={() => (activeRow = idx)}
+              on:click={() => {
+                const realIndex = rowPage * rowsPerPage + idx;
+                activeRow = realIndex;
+              }}
               on:keydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  activeRow = idx;
+                  const realIndex = rowPage * rowsPerPage + idx;
+                  activeRow = realIndex;
                 }
               }}
             >
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2 text-sm text-muted">
-                  <span class="rounded-full bg-slate-100 px-3 py-1 text-fg">Baris {idx + 1}</span>
-                  {#if idx === activeRow}
+                  <span class="rounded-full bg-slate-100 px-3 py-1 text-fg">Baris {rowPage * rowsPerPage + idx + 1}</span>
+                  {#if rowPage * rowsPerPage + idx === activeRow}
                     <span class="rounded-full bg-brand/10 px-3 py-1 text-sm font-semibold text-brand">Aktif</span>
                   {/if}
                 </div>
@@ -496,7 +543,7 @@
                   type="button"
                   on:click={(e) => {
                     e.stopPropagation();
-                    removeRow(idx);
+                    removeRow(rowPage * rowsPerPage + idx);
                   }}
                 >
                   Hapus
@@ -504,109 +551,158 @@
               </div>
 
               <div class="mt-4 grid gap-4 md:grid-cols-2">
-                <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'date')}>
-                  <label class="block text-sm font-semibold text-fg" for={`tanggal-${idx}`}>Tanggal</label>
+                <div
+                  on:dragover|preventDefault
+                  on:drop={(e) => {
+                    activeRow = rowPage * rowsPerPage + idx;
+                    onDropField(e, 'date');
+                  }}
+                >
+                  <label class="block text-sm font-semibold text-fg" for={`tanggal-${rowPage * rowsPerPage + idx}`}>Tanggal</label>
                   <input
-                    id={`tanggal-${idx}`}
+                    id={`tanggal-${rowPage * rowsPerPage + idx}`}
                     class={inputClass}
                     placeholder="YYYY-MM-DD"
                     value={row.date}
-                    on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)}
+                    on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'date', (e.target as HTMLInputElement).value)}
                   />
                   <p class="mt-1 text-xs text-muted">Format: YYYY-MM-DD</p>
                 </div>
-                <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'item')}>
-                  <label class="block text-sm font-semibold text-fg" for={`item-${idx}`}>Nama barang</label>
+                <div
+                  on:dragover|preventDefault
+                  on:drop={(e) => {
+                    activeRow = rowPage * rowsPerPage + idx;
+                    onDropField(e, 'item');
+                  }}
+                >
+                  <label class="block text-sm font-semibold text-fg" for={`item-${rowPage * rowsPerPage + idx}`}>Nama barang</label>
                   <input
-                    id={`item-${idx}`}
+                    id={`item-${rowPage * rowsPerPage + idx}`}
                     class={inputClass}
                     placeholder="Nama barang"
                     value={row.item}
-                    on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)}
+                    on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'item', (e.target as HTMLInputElement).value)}
                   />
                 </div>
                 <div class="grid gap-4 md:col-span-2 md:grid-cols-2">
-                  <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'qty')}>
-                    <label class="block text-sm font-semibold text-fg" for={`qty-${idx}`}>Qty</label>
+                  <div
+                    on:dragover|preventDefault
+                    on:drop={(e) => {
+                      activeRow = rowPage * rowsPerPage + idx;
+                      onDropField(e, 'qty');
+                    }}
+                  >
+                    <label class="block text-sm font-semibold text-fg" for={`qty-${rowPage * rowsPerPage + idx}`}>Qty</label>
                     <input
-                      id={`qty-${idx}`}
+                      id={`qty-${rowPage * rowsPerPage + idx}`}
                       class={inputClass}
                       type="number"
                       min="0"
                       step="1"
                       value={row.qty}
-                      on:input={(e) => updateField(idx, 'qty', (e.target as HTMLInputElement).value)}
+                      on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'qty', (e.target as HTMLInputElement).value)}
                     />
                   </div>
-                  <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'unit')}>
-                    <label class="block text-sm font-semibold text-fg" for={`unit-${idx}`}>Unit</label>
+                  <div
+                    on:dragover|preventDefault
+                    on:drop={(e) => {
+                      activeRow = rowPage * rowsPerPage + idx;
+                      onDropField(e, 'unit');
+                    }}
+                  >
+                    <label class="block text-sm font-semibold text-fg" for={`unit-${rowPage * rowsPerPage + idx}`}>Unit</label>
                     <input
-                      id={`unit-${idx}`}
+                      id={`unit-${rowPage * rowsPerPage + idx}`}
                       class={inputClass}
                       placeholder="pcs/kg"
                       value={row.unit ?? ''}
-                      on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)}
+                      on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'unit', (e.target as HTMLInputElement).value)}
                     />
                     <p class="mt-1 text-xs text-muted">Gunakan singkatan sederhana.</p>
                   </div>
                 </div>
                 <div class="grid gap-4 md:col-span-2 md:grid-cols-2">
-                  <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'price')}>
-                    <label class="block text-sm font-semibold text-fg" for={`price-${idx}`}>Harga</label>
+                  <div
+                    on:dragover|preventDefault
+                    on:drop={(e) => {
+                      activeRow = rowPage * rowsPerPage + idx;
+                      onDropField(e, 'price');
+                    }}
+                  >
+                    <label class="block text-sm font-semibold text-fg" for={`price-${rowPage * rowsPerPage + idx}`}>Harga</label>
                     <input
-                      id={`price-${idx}`}
+                      id={`price-${rowPage * rowsPerPage + idx}`}
                       class={inputClass}
                       type="number"
                       min="0"
                       value={row.price ?? ''}
-                      on:input={(e) => updateField(idx, 'price', (e.target as HTMLInputElement).value)}
+                      on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'price', (e.target as HTMLInputElement).value)}
                     />
                   </div>
-                  <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'total')}>
-                    <label class="block text-sm font-semibold text-fg" for={`total-${idx}`}>Total</label>
+                  <div
+                    on:dragover|preventDefault
+                    on:drop={(e) => {
+                      activeRow = rowPage * rowsPerPage + idx;
+                      onDropField(e, 'total');
+                    }}
+                  >
+                    <label class="block text-sm font-semibold text-fg" for={`total-${rowPage * rowsPerPage + idx}`}>Total</label>
                     <input
-                      id={`total-${idx}`}
+                      id={`total-${rowPage * rowsPerPage + idx}`}
                       class={inputClass}
                       type="number"
                       min="0"
                       value={row.total ?? ''}
-                      on:input={(e) => updateField(idx, 'total', (e.target as HTMLInputElement).value)}
+                      on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'total', (e.target as HTMLInputElement).value)}
                     />
                   </div>
                 </div>
                 <div>
-                  <label class="block text-sm font-semibold text-fg" for={`type-${idx}`}>Type</label>
+                  <label class="block text-sm font-semibold text-fg" for={`type-${rowPage * rowsPerPage + idx}`}>Type</label>
                   <select
-                    id={`type-${idx}`}
+                    id={`type-${rowPage * rowsPerPage + idx}`}
                     class={inputClass}
                     value={row.type ?? ''}
-                    on:change={(e) => updateField(idx, 'type', (e.target as HTMLSelectElement).value)}
+                    on:change={(e) => updateField(rowPage * rowsPerPage + idx, 'type', (e.target as HTMLSelectElement).value)}
                   >
                     <option value="penjualan">Penjualan</option>
                     <option value="pengeluaran">Pengeluaran</option>
                     <option value="lainnya">Lainnya</option>
                   </select>
                 </div>
-                <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'phone')}>
-                  <label class="block text-sm font-semibold text-fg" for={`phone-${idx}`}>No. HP</label>
+                <div
+                  on:dragover|preventDefault
+                  on:drop={(e) => {
+                    activeRow = rowPage * rowsPerPage + idx;
+                    onDropField(e, 'phone');
+                  }}
+                >
+                  <label class="block text-sm font-semibold text-fg" for={`phone-${rowPage * rowsPerPage + idx}`}>No. HP</label>
                   <input
-                    id={`phone-${idx}`}
+                    id={`phone-${rowPage * rowsPerPage + idx}`}
                     class={inputClass}
                     placeholder="08123456789"
                     value={row.phone ?? ''}
-                    on:input={(e) => updateField(idx, 'phone', (e.target as HTMLInputElement).value)}
+                    on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'phone', (e.target as HTMLInputElement).value)}
                   />
                   <p class="mt-1 text-xs text-muted">Gunakan 10-13 digit tanpa spasi.</p>
                 </div>
-                <div class="md:col-span-2" on:dragover|preventDefault on:drop={(e) => onDropField(e, 'address')}>
-                  <label class="block text-sm font-semibold text-fg" for={`address-${idx}`}>Alamat</label>
+                <div
+                  class="md:col-span-2"
+                  on:dragover|preventDefault
+                  on:drop={(e) => {
+                    activeRow = rowPage * rowsPerPage + idx;
+                    onDropField(e, 'address');
+                  }}
+                >
+                  <label class="block text-sm font-semibold text-fg" for={`address-${rowPage * rowsPerPage + idx}`}>Alamat</label>
                   <textarea
-                    id={`address-${idx}`}
+                    id={`address-${rowPage * rowsPerPage + idx}`}
                     class={textareaClass}
                     rows="2"
                     placeholder="Alamat lengkap"
                     value={row.address ?? ''}
-                    on:input={(e) => updateField(idx, 'address', (e.target as HTMLTextAreaElement).value)}
+                    on:input={(e) => updateField(rowPage * rowsPerPage + idx, 'address', (e.target as HTMLTextAreaElement).value)}
                   ></textarea>
                 </div>
               </div>
