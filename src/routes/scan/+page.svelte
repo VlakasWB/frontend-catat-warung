@@ -76,9 +76,36 @@
     rows = rows.map((r, i) => (i === idx ? next : r));
   };
 
+  const onDragStart = (event: DragEvent, detection: Detection) => {
+    event.dataTransfer?.setData('application/json', JSON.stringify(detection));
+    event.dataTransfer?.setData('text/plain', detection.text);
+  };
+
+  const onDropField = (event: DragEvent, field: keyof ParsedRow) => {
+    event.preventDefault();
+    const raw = event.dataTransfer?.getData('application/json');
+    if (!raw) return;
+    try {
+      const detection = JSON.parse(raw) as Detection;
+      applyDetectionToField(detection, field);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const addRow = () => {
     rows = [...rows, defaultRow()];
     activeRow = rows.length - 1;
+  };
+
+  const removeRow = (idx: number) => {
+    rows = rows.filter((_, i) => i !== idx);
+    if (rows.length === 0) {
+      rows = [defaultRow()];
+      activeRow = 0;
+      return;
+    }
+    if (activeRow >= rows.length) activeRow = Math.max(0, rows.length - 1);
   };
 
   const submit = async (event: Event) => {
@@ -173,161 +200,171 @@
       {/if}
     </button>
 
-    {#if error}
-      <p class="text-error text-sm">{error}</p>
-    {/if}
-  </form>
+  {#if error}
+    <p class="text-error text-sm">{error}</p>
+  {/if}
+</form>
 
-  {#if scanData}
-    <div class="card frosted space-y-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-lg font-semibold text-foreground">Hasil OCR & Mapping</h2>
-          <p class="text-muted text-sm">Pilih hasil OCR dan tetapkan ke kolom/baris yang diinginkan.</p>
-        </div>
+{#if scanData}
+  <div class="card frosted space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-foreground">Hasil OCR & Mapping</h2>
+        <p class="text-muted text-sm">Tarik hasil OCR ke kolom yang ingin diisi.</p>
       </div>
+      <button class="ghost" type="button" on:click={addRow}>Tambah baris</button>
+    </div>
 
-      {#if annotatedUrl}
-        <div class="annotated-wrapper">
-          <img src={annotatedUrl} alt="Annotated OCR" class="annotated-image" />
-        </div>
-      {/if}
+    {#if annotatedUrl}
+      <div class="annotated-wrapper">
+        <img src={annotatedUrl} alt="Annotated OCR" class="annotated-image" />
+      </div>
+    {/if}
 
-      <div class="stacked">
-        <div class="column">
-          <h3 class="text-sm font-semibold text-foreground mb-2">Deteksi OCR</h3>
-          {#if detections.length === 0}
-            <p class="text-muted text-sm">Tidak ada deteksi terstruktur.</p>
-          {:else}
-            <div class="detects-horizontal">
-              {#each detections as det}
-                <div class="detect-card">
-                  <div class="flex justify-between text-xs text-muted">
-                    <span>#{det.index}</span>
-                    {#if det.score !== undefined}
-                      <span>score: {det.score?.toFixed(2)}</span>
-                    {/if}
-                  </div>
-                  <p class="text-foreground text-sm">{det.text}</p>
-                  <div class="detect-actions">
-                    <button type="button" on:click={() => applyDetectionToField(det, 'date')}>Tanggal</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'item')}>Item</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'qty')}>Qty</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'price')}>Harga</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'total')}>Total</button>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {/if}
-        </div>
-
-        <div class="column">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-foreground">Baris yang akan disimpan</h3>
-            <button class="ghost small" type="button" on:click={addRow}>Tambah baris</button>
-          </div>
-          <div class="rows horizontal">
-            {#each rows as row, idx}
+    <div class="mapping-grid">
+      <div class="detect-column">
+        <h3 class="text-sm font-semibold text-foreground mb-2">Deteksi OCR</h3>
+        {#if detections.length === 0}
+          <p class="text-muted text-sm">Tidak ada deteksi terstruktur.</p>
+        {:else}
+          <div class="detects-horizontal">
+            {#each detections as det}
               <div
-                class={`row ${idx === activeRow ? 'active' : ''}`}
+                class="detect-card"
                 role="button"
                 tabindex="0"
-                on:click={() => (activeRow = idx)}
+                draggable="true"
+                on:dragstart={(e) => onDragStart(e, det)}
                 on:keydown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    activeRow = idx;
+                    onDragStart(e as unknown as DragEvent, det);
                   }
                 }}
               >
-                <div class="row-head">
-                  <span class="badge">Row {idx + 1}</span>
-                  {#if row.source}
-                    <span class="badge ghost">{row.source}</span>
-                  {/if}
-                  {#if idx === activeRow}
-                    <span class="badge primary-badge">Aktif</span>
+                <div class="flex justify-between text-xs text-muted">
+                  <span>#{det.index}</span>
+                  {#if det.score !== undefined}
+                    <span>score: {det.score?.toFixed(2)}</span>
                   {/if}
                 </div>
-                <div class="row-fields horizontal-fields">
-                  <label>
-                    <span>Tanggal</span>
-                    <input
-                      class="input"
-                      placeholder="YYYY-MM-DD"
-                      value={row.date}
-                      on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                  <label class="wide">
-                    <span>Item</span>
-                    <input
-                      class="input"
-                      placeholder="Nama barang"
-                      value={row.item}
-                      on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Qty</span>
-                    <input
-                      class="input"
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={row.qty}
-                      on:input={(e) => updateField(idx, 'qty', (e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Unit</span>
-                    <input
-                      class="input"
-                      placeholder="pcs/kg"
-                      value={row.unit ?? ''}
-                      on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Harga</span>
-                    <input
-                      class="input"
-                      type="number"
-                      min="0"
-                      value={row.price ?? ''}
-                      on:input={(e) => updateField(idx, 'price', (e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Total</span>
-                    <input
-                      class="input"
-                      type="number"
-                      min="0"
-                      value={row.total ?? ''}
-                      on:input={(e) => updateField(idx, 'total', (e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Type</span>
-                    <select class="input" value={row.type ?? ''} on:change={(e) => updateField(idx, 'type', (e.target as HTMLSelectElement).value)}>
-                      <option value="penjualan">Penjualan</option>
-                      <option value="pengeluaran">Pengeluaran</option>
-                      <option value="lainnya">Lainnya</option>
-                    </select>
-                  </label>
+                <p class="text-foreground text-sm">{det.text}</p>
+                <div class="detect-actions">
+                  <button type="button" on:click={() => applyDetectionToField(det, 'date')}>Tanggal</button>
+                  <button type="button" on:click={() => applyDetectionToField(det, 'item')}>Item</button>
+                  <button type="button" on:click={() => applyDetectionToField(det, 'qty')}>Qty</button>
+                  <button type="button" on:click={() => applyDetectionToField(det, 'price')}>Harga</button>
+                  <button type="button" on:click={() => applyDetectionToField(det, 'total')}>Total</button>
                 </div>
               </div>
             {/each}
           </div>
-          <div class="mt-3 flex justify-end gap-2">
-            <button class="primary" type="button" on:click={proceedToReview}>Simpan & lanjut ke review</button>
-          </div>
+        {/if}
+      </div>
+
+      <div class="rows-column">
+        <h3 class="text-sm font-semibold text-foreground mb-2">Baris yang akan disimpan</h3>
+        <div class="rows">
+          {#each rows as row, idx}
+            <div
+              class={`row ${idx === activeRow ? 'active' : ''}`}
+              role="button"
+              tabindex="0"
+              on:click={() => (activeRow = idx)}
+              on:keydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  activeRow = idx;
+                }
+              }}
+            >
+              <div class="row-head">
+                <span class="badge">Row {idx + 1}</span>
+                {#if idx === activeRow}
+                  <span class="badge primary-badge">Aktif</span>
+                {/if}
+                <button class="ghost danger small" type="button" on:click={(e) => { e.stopPropagation(); removeRow(idx); }}>
+                  Hapus
+                </button>
+              </div>
+              <div class="row-fields horizontal-fields">
+                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'date')}>
+                  <span>Tanggal</span>
+                  <input
+                    class="input"
+                    placeholder="YYYY-MM-DD"
+                    value={row.date}
+                    on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label class="wide" on:dragover|preventDefault on:drop={(e) => onDropField(e, 'item')}>
+                  <span>Item</span>
+                  <input
+                    class="input"
+                    placeholder="Nama barang"
+                    value={row.item}
+                    on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'qty')}>
+                  <span>Qty</span>
+                  <input
+                    class="input"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={row.qty}
+                    on:input={(e) => updateField(idx, 'qty', (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'unit')}>
+                  <span>Unit</span>
+                  <input
+                    class="input"
+                    placeholder="pcs/kg"
+                    value={row.unit ?? ''}
+                    on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'price')}>
+                  <span>Harga</span>
+                  <input
+                    class="input"
+                    type="number"
+                    min="0"
+                    value={row.price ?? ''}
+                    on:input={(e) => updateField(idx, 'price', (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'total')}>
+                  <span>Total</span>
+                  <input
+                    class="input"
+                    type="number"
+                    min="0"
+                    value={row.total ?? ''}
+                    on:input={(e) => updateField(idx, 'total', (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label>
+                  <span>Type</span>
+                  <select class="input" value={row.type ?? ''} on:change={(e) => updateField(idx, 'type', (e.target as HTMLSelectElement).value)}>
+                    <option value="penjualan">Penjualan</option>
+                    <option value="pengeluaran">Pengeluaran</option>
+                    <option value="lainnya">Lainnya</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          {/each}
+        </div>
+        <div class="mt-3 flex justify-end gap-2">
+          <button class="primary" type="button" on:click={proceedToReview}>Simpan & lanjut ke review</button>
         </div>
       </div>
     </div>
-  {/if}
+  </div>
+{/if}
 </div>
 
 <style>
@@ -393,6 +430,14 @@
     color: var(--text);
     font-weight: 600;
   }
+  .ghost.small {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .ghost.danger {
+    border-color: #f87171;
+    color: #fca5a5;
+  }
   .file-row {
     display: flex;
     gap: 10px;
@@ -449,22 +494,25 @@
     border-radius: 8px;
     object-fit: contain;
   }
-  .grid-cols {
+  .mapping-grid {
     display: grid;
     grid-template-columns: 1fr 1.2fr;
     gap: 16px;
   }
-  .column {
+  .detect-column,
+  .rows-column {
     background: var(--surface-muted);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 12px;
   }
-  .detections {
+  .detects-horizontal {
     display: grid;
-    gap: 10px;
-    max-height: 420px;
-    overflow-y: auto;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 1fr);
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 6px;
   }
   .detect-card {
     border: 1px solid var(--border);
@@ -474,14 +522,6 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-  .detects-horizontal {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(220px, 1fr);
-    gap: 12px;
-    overflow-x: auto;
-    padding-bottom: 6px;
   }
   .detect-actions {
     display: flex;
@@ -527,20 +567,17 @@
     color: var(--muted);
     font-size: 12px;
   }
-  .badge.ghost {
-    background: var(--surface-muted);
-  }
   .primary-badge {
     border-color: rgba(34, 211, 238, 0.7);
     color: #22d3ee;
   }
   .row-fields {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
   }
   .row-fields.horizontal-fields {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
   .row-fields label {
     display: flex;
@@ -548,13 +585,14 @@
     gap: 4px;
     font-size: 12px;
     color: var(--muted);
+    padding: 6px;
+    border: 1px dashed transparent;
+    border-radius: 8px;
+  }
+  .row-fields label:focus-within {
+    border-color: rgba(34, 211, 238, 0.5);
   }
   .row-fields label.wide {
     grid-column: span 2;
-  }
-  .stacked {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
   }
 </style>
