@@ -4,8 +4,7 @@
 
   export let data: PageData;
 
-  const onlyJpg = (items: OutputFile[] = []) =>
-    items.filter((file) => file.name?.toLowerCase().endsWith('.jpg'));
+  const onlyJpg = (items: OutputFile[] = []) => items.filter((file) => file.name?.toLowerCase().endsWith('.jpg'));
 
   let files: OutputFile[] = onlyJpg(data.outputs.files);
   let loading = false;
@@ -42,73 +41,61 @@
   };
 </script>
 
-<div class="space-y-6">
-  <div class="card">
-    <div class="flex items-center justify-between gap-3">
+<div class="space-y-8">
+  <section class="brand-gradient rounded-2xl p-6 shadow-soft lg:p-8">
+    <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <p class="text-sm text-slate-400">Catat Warung</p>
-        <h1 class="text-xl font-semibold text-slate-100">Output OCR</h1>
-        <p class="text-sm text-slate-400">Daftar file anotasi, txt, atau json yang dihasilkan backend.</p>
+        <p class="text-sm font-medium text-white/90">Catat Warung</p>
+        <h1 class="mt-1 text-3xl font-bold text-white">Output OCR</h1>
+        <p class="text-base text-white/90">Daftar file anotasi, teks, atau json yang dihasilkan backend.</p>
       </div>
-      <button class="ghost" type="button" on:click={refresh} disabled={loading}>
+      <button
+        class="inline-flex h-12 items-center justify-center rounded-2xl border border-white/60 bg-white/20 px-5 text-base font-semibold text-white backdrop-blur transition hover:bg-white/30 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60"
+        type="button"
+        on:click={refresh}
+        disabled={loading}
+      >
         {loading ? 'Memuat...' : 'Refresh'}
       </button>
     </div>
-  </div>
+  </section>
 
-  <div class="card overflow-x-auto">
+  <section class="card overflow-x-auto">
     {#if errorMsg}
-      <p class="text-sm text-rose-300 mb-3">{errorMsg}</p>
+      <p class="mb-3 text-sm font-semibold text-error">{errorMsg}</p>
     {/if}
     {#if files.length === 0}
-      <p class="text-sm text-slate-400">Belum ada output. Lakukan scan terlebih dahulu.</p>
+      <p class="text-sm text-muted">Belum ada output. Lakukan scan terlebih dahulu.</p>
     {:else}
-      <table class="min-w-full text-sm text-slate-100">
-        <thead class="text-left text-slate-400 border-b border-slate-800">
+      <table class="min-w-full text-sm text-fg">
+        <thead class="bg-slate-50 text-left text-muted">
           <tr>
-            <th class="py-2 pr-4">Nama</th>
-            <th class="py-2 pr-4">Ukuran</th>
-            <th class="py-2 pr-4">Terakhir diubah</th>
-            <th class="py-2 pr-4">Aksi</th>
+            <th class="px-3 py-3 font-semibold">Nama</th>
+            <th class="px-3 py-3 font-semibold">Ukuran</th>
+            <th class="px-3 py-3 font-semibold">Terakhir diubah</th>
+            <th class="px-3 py-3 font-semibold">Aksi</th>
           </tr>
         </thead>
         <tbody>
           {#each files as file}
-            <tr class="border-b border-slate-800/60">
-              <td class="py-2 pr-4">{file.name}</td>
-              <td class="py-2 pr-4">{formatSize(file.size_bytes)}</td>
-              <td class="py-2 pr-4 text-slate-400">{formatDate(file.modified_at)}</td>
-              <td class="py-2 pr-4">
-                <a class="pill-link" href={file.url} target="_blank" rel="noreferrer">Buka</a>
+            <tr class="border-b border-border/70">
+              <td class="px-3 py-3 align-top text-base font-semibold text-fg">{file.name}</td>
+              <td class="px-3 py-3 align-top text-fg">{formatSize(file.size_bytes)}</td>
+              <td class="px-3 py-3 align-top text-muted">{formatDate(file.modified_at)}</td>
+              <td class="px-3 py-3 align-top">
+                <a
+                  class="inline-flex h-11 items-center justify-center rounded-2xl border border-brand/60 bg-brand/10 px-4 text-sm font-semibold text-brand hover:bg-brand/15 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Buka
+                </a>
               </td>
             </tr>
           {/each}
         </tbody>
       </table>
     {/if}
-  </div>
+  </section>
 </div>
-
-<style>
-  .ghost {
-    border-radius: 10px;
-    padding: 10px 12px;
-    border: 1px solid #1f2937;
-    background: rgba(17, 24, 39, 0.8);
-    color: #e2e8f0;
-    font-weight: 600;
-  }
-  .pill-link {
-    display: inline-block;
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid #0ea5e9;
-    color: #bae6fd;
-    font-weight: 600;
-    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-  }
-  .pill-link:hover {
-    background: rgba(14, 165, 233, 0.1);
-    border-color: #38bdf8;
-  }
-</style>

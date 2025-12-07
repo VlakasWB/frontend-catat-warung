@@ -6,6 +6,8 @@ export type ParsedRow = {
   price?: number;
   total?: number;
   type?: string;
+  phone?: string;
+  address?: string;
   confidence?: number;
   source?: string;
 };

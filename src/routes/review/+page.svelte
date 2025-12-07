@@ -50,9 +50,7 @@
         ? {
             ...row,
             [field]:
-              field === 'qty' || field === 'price' || field === 'total'
-                ? toNumberOrUndefined(value)
-                : value
+              field === 'qty' || field === 'price' || field === 'total' ? toNumberOrUndefined(value) : value
           }
         : row
     );
@@ -81,93 +79,107 @@
       saving = false;
     }
   };
+
+  const inputClass =
+    'h-12 w-full rounded-2xl border border-border bg-white px-4 text-[16px] text-fg placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/40 focus:outline-none';
 </script>
 
-<div class="space-y-6">
-  <div class="card">
-    <div class="flex items-center justify-between">
+<main class="mx-auto max-w-6xl space-y-8 pb-16">
+  <section class="brand-gradient rounded-2xl p-6 shadow-soft lg:p-8">
+    <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-xl font-semibold text-slate-100">Review & Validasi</h1>
-        <p class="text-slate-400 text-sm">Tandai benar/salah, edit inline, lalu simpan.</p>
+        <h1 class="text-3xl font-bold text-white">Review & Validasi</h1>
+        <p class="mt-2 max-w-3xl text-base text-white/90">Tandai benar/salah, edit inline, lalu simpan ke database.</p>
       </div>
-      {#if scan?.used_llm}
-        <span class="text-xs bg-emerald-500/20 text-emerald-200 px-3 py-1 rounded-full">Groq LLM aktif</span>
-      {:else}
-        <span class="text-xs bg-slate-700 px-3 py-1 rounded-full">Rule-based</span>
+      {#if scan}
+        <span class="inline-flex items-center rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white">
+          {scan.used_llm ? 'Groq LLM aktif' : 'Rule-based'}
+        </span>
       {/if}
     </div>
-  </div>
+  </section>
 
-  <div class="card overflow-x-auto">
-    <table class="min-w-full text-sm text-slate-200">
-      <thead class="text-left text-slate-400 border-b border-slate-700">
+  <section class="card space-y-4 overflow-x-auto">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-fg">Baris terdeteksi</h2>
+        <p class="text-sm text-muted">Semua input tinggi 48px, fokus jelas, dan teks kontras tinggi.</p>
+      </div>
+      <p class="text-sm text-muted">
+        Total baris: <span class="font-semibold text-fg">{rows.length}</span>
+      </p>
+    </div>
+
+    <table class="min-w-full text-sm text-fg">
+      <thead class="bg-slate-50 text-left text-muted">
         <tr>
-          <th class="py-2 pr-3">Tanggal</th>
-          <th class="py-2 pr-3">Item</th>
-          <th class="py-2 pr-3">Qty</th>
-          <th class="py-2 pr-3">Unit</th>
-          <th class="py-2 pr-3">Harga</th>
-          <th class="py-2 pr-3">Total</th>
-          <th class="py-2 pr-3">Type</th>
-          <th class="py-2 pr-3">Aksi</th>
+          <th class="px-3 py-2 font-semibold">Tanggal</th>
+          <th class="px-3 py-2 font-semibold">Item</th>
+          <th class="px-3 py-2 font-semibold">Qty</th>
+          <th class="px-3 py-2 font-semibold">Unit</th>
+          <th class="px-3 py-2 font-semibold">Harga</th>
+          <th class="px-3 py-2 font-semibold">Total</th>
+          <th class="px-3 py-2 font-semibold">Type</th>
+          <th class="px-3 py-2 font-semibold">Aksi</th>
         </tr>
       </thead>
       <tbody>
         {#if rows.length === 0}
           <tr>
-            <td colspan="8" class="py-4 text-slate-400">Belum ada hasil. Mulai dari halaman scan.</td>
+            <td colspan="8" class="px-3 py-6 text-center text-muted">Belum ada hasil. Mulai dari halaman scan.</td>
           </tr>
         {:else}
           {#each rows as row, idx}
-            <tr class="border-b border-slate-800/60">
-              <td class="py-2 pr-3">
+            <tr class="border-b border-border/70">
+              <td class="px-3 py-2">
                 <input
-                  class="input"
+                  class={inputClass}
                   value={row.date}
                   on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)}
                 />
+                <p class="mt-1 text-xs text-muted">Format: YYYY-MM-DD</p>
               </td>
-              <td class="py-2 pr-3">
+              <td class="px-3 py-2">
                 <input
-                  class="input"
+                  class={inputClass}
                   value={row.item}
                   on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)}
                 />
               </td>
-              <td class="py-2 pr-3 w-20">
+              <td class="px-3 py-2 w-28">
                 <input
-                  class="input"
+                  class={inputClass}
                   type="number"
                   value={row.qty}
                   on:input={(e) => updateField(idx, 'qty', (e.target as HTMLInputElement).value)}
                 />
               </td>
-              <td class="py-2 pr-3 w-24">
+              <td class="px-3 py-2 w-32">
                 <input
-                  class="input"
+                  class={inputClass}
                   value={row.unit ?? ''}
                   on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)}
                 />
               </td>
-              <td class="py-2 pr-3 w-24">
+              <td class="px-3 py-2 w-32">
                 <input
-                  class="input"
+                  class={inputClass}
                   type="number"
                   value={row.price ?? ''}
                   on:input={(e) => updateField(idx, 'price', (e.target as HTMLInputElement).value)}
                 />
               </td>
-              <td class="py-2 pr-3 w-24">
+              <td class="px-3 py-2 w-32">
                 <input
-                  class="input"
+                  class={inputClass}
                   type="number"
                   value={row.total ?? ''}
                   on:input={(e) => updateField(idx, 'total', (e.target as HTMLInputElement).value)}
                 />
               </td>
-              <td class="py-2 pr-3 w-28">
+              <td class="px-3 py-2 w-36">
                 <select
-                  class="input"
+                  class={inputClass}
                   value={row.type ?? ''}
                   on:change={(e) => updateField(idx, 'type', (e.target as HTMLSelectElement).value)}
                 >
@@ -176,47 +188,63 @@
                   <option value="lainnya">Lainnya</option>
                 </select>
               </td>
-              <td class="py-2 pr-3 flex gap-2">
-                <button class="pill success" on:click={() => markValid(idx)}>Benar</button>
-                <button class="pill danger" on:click={() => removeRow(idx)}>Hapus</button>
+              <td class="px-3 py-2">
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-2xl border border-success/40 bg-emerald-50 px-4 text-sm font-semibold text-success hover:bg-emerald-100 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    on:click={() => markValid(idx)}
+                    type="button"
+                  >
+                    Benar
+                  </button>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-2xl border border-error/40 bg-rose-50 px-4 text-sm font-semibold text-error hover:bg-rose-100 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    on:click={() => removeRow(idx)}
+                    type="button"
+                  >
+                    Hapus
+                  </button>
+                </div>
               </td>
             </tr>
           {/each}
         {/if}
       </tbody>
     </table>
-  </div>
+  </section>
 
-  <div class="flex gap-3">
-    <button class="btn-primary" on:click={save} disabled={rows.length === 0 || saving}>
+  <div class="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft md:flex-row md:items-center md:justify-between">
+    <div class="space-y-1">
+      <p class="text-base font-semibold text-fg">Siap simpan?</p>
+      <p class="text-sm text-muted">
+        Pastikan kolom terisi jelas. Tap target 56px untuk tombol utama agar mudah ditekan.
+      </p>
       {#if saving}
-        Menyimpan...
-      {:else}
-        Simpan
+        <p class="text-sm font-semibold text-brand">Menyimpan ke database, mohon tunggu...</p>
+      {:else if status}
+        <p class="text-sm font-semibold text-muted">{status}</p>
       {/if}
-    </button>
-    {#if saving}
-      <span class="text-sm text-slate-300">Menyimpan ke database, mohon tunggu...</span>
-    {:else if status}
-      <span class="text-sm text-slate-300">{status}</span>
-    {/if}
+    </div>
+    <div class="flex w-full flex-col gap-2 md:w-auto md:flex-row">
+      <button
+        class="h-14 w-full rounded-2xl border border-border bg-white px-5 text-base font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none md:w-44"
+        type="button"
+        on:click={() => goto('/scan')}
+      >
+        Kembali ke scan
+      </button>
+      <button
+        class="brand-gradient h-14 w-full rounded-2xl px-6 text-base font-semibold text-white shadow-soft transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60 md:w-48"
+        on:click={save}
+        disabled={rows.length === 0 || saving}
+        type="button"
+      >
+        {#if saving}
+          Menyimpan...
+        {:else}
+          Simpan data
+        {/if}
+      </button>
+    </div>
   </div>
-</div>
-
-<style>
-  .input {
-    @apply w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-sm;
-  }
-  .pill {
-    @apply text-xs px-3 py-1 rounded-full border border-slate-700 hover:border-sky-400 transition;
-  }
-  .pill.success {
-    @apply border-emerald-500 text-emerald-200;
-  }
-  .pill.danger {
-    @apply border-rose-500 text-rose-300;
-  }
-  .btn-primary {
-    @apply bg-sky-500 hover:bg-sky-400 text-slate-900 font-semibold px-4 py-2 rounded-lg transition disabled:opacity-60;
-  }
-</style>
+</main>

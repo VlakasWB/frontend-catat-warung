@@ -27,7 +27,9 @@ export const POST: RequestHandler = async ({ request }) => {
     unit: row.unit || 'pcs',
     price: row.price ? Math.round(row.price) : null,
     total: row.total ? Math.round(row.total) : null,
-    type: row.type || 'penjualan'
+    type: row.type || 'penjualan',
+    phone: row.phone || null,
+    address: row.address || null
   }));
 
   await prisma.transaction.createMany({ data: toInsert });

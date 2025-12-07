@@ -4,12 +4,12 @@
   import Header from '$lib/components/Header.svelte';
 </script>
 
-<div class="min-h-screen bg-slate-950 text-slate-100 flex">
+<div class="flex min-h-screen bg-bg text-fg">
   <Sidebar />
-  <div class="flex-1 flex flex-col">
+  <div class="flex flex-1 flex-col">
     <Header />
-    <main class="flex-1 px-4 sm:px-6 py-6">
-      <div class="max-w-6xl mx-auto">
+    <main class="flex-1 px-4 py-6 sm:px-6">
+      <div class="mx-auto max-w-6xl">
         <slot />
       </div>
     </main>

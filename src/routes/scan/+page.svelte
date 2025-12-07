@@ -12,6 +12,25 @@
   let annotatedUrl: string | null = null;
   let rows: ParsedRow[] = [];
   let activeRow = 0;
+  let detectionPage = 0;
+  const detectionsPerPage = 6;
+  let pagedDetections: Detection[] = [];
+  let totalDetectionPages = 1;
+
+  $: totalDetectionPages = Math.max(1, Math.ceil((detections?.length ?? 0) / detectionsPerPage));
+  $: detectionPage = Math.min(detectionPage, Math.max(0, totalDetectionPages - 1));
+  $: pagedDetections = detections.slice(
+    detectionPage * detectionsPerPage,
+    detectionPage * detectionsPerPage + detectionsPerPage
+  );
+
+  const nextDetectionPage = () => {
+    detectionPage = Math.min(totalDetectionPages - 1, detectionPage + 1);
+  };
+
+  const prevDetectionPage = () => {
+    detectionPage = Math.max(0, detectionPage - 1);
+  };
 
   if (typeof sessionStorage !== 'undefined') {
     sessionStorage.removeItem('scanResult');
@@ -24,7 +43,9 @@
     unit: 'pcs',
     price: undefined,
     total: undefined,
-    type: 'penjualan'
+    type: 'penjualan',
+    phone: '',
+    address: ''
   });
 
   const ensureRow = (idx: number) => {
@@ -43,7 +64,6 @@
   const parseNumberFromText = (text: string): number | null => {
     if (!text) return null;
 
-    // strip currency labels and minus signs; keep only digits and separators
     const withoutCurrency = text.replace(/rp|idr/gi, '').replace(/-/g, '');
     const keepSeparators = withoutCurrency.replace(/[^\d.,]/g, '');
     if (!keepSeparators) return null;
@@ -53,18 +73,38 @@
     let normalized = keepSeparators;
 
     if (hasDot && hasComma) {
-      // assume dot = thousand, comma = decimal
       normalized = normalized.replace(/\./g, '').replace(',', '.');
     } else if (hasComma) {
-      // comma at the end with 1-2 digits -> decimal, otherwise thousand separator
       normalized = /,\d{1,2}$/.test(normalized) ? normalized.replace(',', '.') : normalized.replace(/,/g, '');
     } else if (hasDot) {
-      // dot at the end with 1-2 digits -> decimal, otherwise thousand separator
       normalized = /\.\d{1,2}$/.test(normalized) ? normalized : normalized.replace(/\./g, '');
     }
 
     const num = Number(normalized);
     return Number.isFinite(num) ? num : null;
+  };
+
+  const normalizeDate = (text: string): string | null => {
+    const match = text.match(/(\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4})/);
+    if (!match) return null;
+    const raw = match[1].replace(/\./g, '-').replace(/\//g, '-');
+    const parts = raw.split('-').map((p) => p.padStart(2, '0'));
+    if (parts.length !== 3) return null;
+    let year = '';
+    let month = '';
+    let day = '';
+    if (parts[0].length === 4) {
+      [year, month, day] = parts;
+    } else if (parts[2].length === 4) {
+      [day, month, year] = parts;
+    } else {
+      [day, month, year] = parts;
+      year = year.length === 2 ? `20${year}` : year;
+    }
+    const mm = Number(month);
+    const dd = Number(day);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   };
 
   const applyDetectionToField = (detection: Detection, field: keyof ParsedRow) => {
@@ -78,6 +118,9 @@
       } else {
         (next as any)[field] = undefined;
       }
+    } else if (field === 'date') {
+      const parsed = normalizeDate(detection.text);
+      (next as any)[field] = parsed ?? detection.text;
     } else {
       (next as any)[field] = detection.text;
     }
@@ -99,6 +142,14 @@
   const onDragStart = (event: DragEvent, detection: Detection) => {
     event.dataTransfer?.setData('application/json', JSON.stringify(detection));
     event.dataTransfer?.setData('text/plain', detection.text);
+  };
+
+  const tryAutofillDate = (dets: Detection[]) => {
+    const candidate = dets.map((d) => normalizeDate(d.text)).find((val) => val !== null);
+    if (candidate) {
+      ensureRow(activeRow);
+      rows = rows.map((r, idx) => (idx === activeRow && !r.date ? { ...r, date: candidate as string } : r));
+    }
   };
 
   const onDropField = (event: DragEvent, field: keyof ParsedRow) => {
@@ -148,9 +199,7 @@
       if (!response.ok) {
         const cloned = response.clone();
         const json = await cloned.json().catch(() => null);
-        const detail =
-          (json && (json.detail || json.message)) ||
-          (await response.text().catch(() => ''));
+        const detail = (json && (json.detail || json.message)) || (await response.text().catch(() => ''));
         throw new Error(detail || response.statusText || 'Gagal memproses gambar');
       }
       const data: ScanResult = await response.json();
@@ -160,6 +209,8 @@
       rows = (data.parsed ?? []).map((r) => ({ ...r }));
       if (rows.length === 0) rows = [defaultRow()];
       activeRow = 0;
+      detectionPage = 0;
+      tryAutofillDate(detections);
       sessionStorage.setItem('scanResult', JSON.stringify(data));
     } catch (err) {
       error = err instanceof Error ? err.message : 'Terjadi kesalahan';
@@ -176,26 +227,35 @@
   };
 
   onMount(() => {
-    // clear stale state
     sessionStorage.removeItem('scanResult');
   });
+
+  const inputClass =
+    'h-12 w-full rounded-2xl border border-border bg-white px-4 text-[16px] text-fg placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/40 focus:outline-none';
+  const textareaClass =
+    'w-full rounded-2xl border border-border bg-white px-4 py-3 text-[16px] text-fg placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/40 focus:outline-none';
 </script>
 
-<div class="space-y-6">
-  <div class="card gradient">
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm text-muted">Catat Warung</p>
-        <h1 class="text-xl font-semibold text-foreground">Scan & Simpan Nota</h1>
-        <p class="text-muted text-sm">Unggah foto, proses OCR, lalu validasi sebelum simpan.</p>
-      </div>
+<main class="mx-auto max-w-6xl space-y-8 pb-16">
+  <section class="brand-gradient rounded-2xl p-6 shadow-soft lg:p-8">
+    <p class="text-sm font-medium text-white/90">Catat Warung</p>
+    <h1 class="mt-1 text-3xl font-bold text-white">Scan & Simpan Nota</h1>
+    <p class="mt-2 max-w-3xl text-base text-white/90">
+      Unggah foto nota, proses OCR, lalu validasi sebelum disimpan. Tampilan terang dengan teks lebih besar agar mudah dibaca
+      pemilik warung.
+    </p>
+    <div class="mt-4 flex flex-wrap gap-3 text-sm text-white/90">
+      <span class="inline-flex items-center rounded-full bg-white/15 px-3 py-1">1. Unggah & proses</span>
+      <span class="inline-flex items-center rounded-full bg-white/15 px-3 py-1">2. Drag hasil OCR</span>
+      <span class="inline-flex items-center rounded-full bg-white/15 px-3 py-1">3. Review & simpan</span>
     </div>
-  </div>
+  </section>
 
-  <form class="card frosted space-y-4" data-testid="scan-form" on:submit|preventDefault={submit}>
+  <form class="card space-y-6" data-testid="scan-form" on:submit|preventDefault={submit}>
     <div class="space-y-2">
-      <label class="block text-sm text-foreground" for="image">Upload gambar nota</label>
-      <div class="file-row">
+      <label class="block text-sm font-semibold text-fg" for="image">Upload gambar nota</label>
+      <p class="text-sm text-muted">Gunakan foto tajam. Format: JPG/PNG. Maks 10MB.</p>
+      <div class="flex flex-col gap-3 rounded-2xl border border-dashed border-border bg-white/70 p-4 sm:flex-row sm:items-center">
         <input
           type="file"
           name="image"
@@ -205,14 +265,21 @@
           on:change={onFileChange}
           required
         />
-        <label class="file-button" for="image">
+        <label
+          class="brand-gradient inline-flex h-12 cursor-pointer items-center justify-center rounded-2xl px-5 text-base font-semibold text-white shadow-soft transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+          for="image"
+        >
           {file ? 'Ganti gambar' : 'Pilih gambar'}
         </label>
-        <span class="file-name text-muted">{file ? file.name : 'Belum ada file'}</span>
+        <span class="text-sm text-muted sm:flex-1">{file ? file.name : 'Belum ada file dipilih'}</span>
       </div>
     </div>
 
-    <button class="primary" disabled={loading} type="submit">
+    <button
+      class="brand-gradient h-14 w-full rounded-2xl px-6 text-lg font-semibold text-white shadow-soft transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60"
+      disabled={loading}
+      type="submit"
+    >
       {#if loading}
         Memproses...
       {:else}
@@ -220,37 +287,52 @@
       {/if}
     </button>
 
-  {#if error}
-    <p class="text-error text-sm">{error}</p>
-  {/if}
-</form>
-
-{#if scanData}
-  <div class="card frosted space-y-4">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-lg font-semibold text-foreground">Hasil OCR & Mapping</h2>
-        <p class="text-muted text-sm">Tarik hasil OCR ke kolom yang ingin diisi.</p>
-      </div>
-      <button class="ghost" type="button" on:click={addRow}>Tambah baris</button>
-    </div>
-
-    {#if annotatedUrl}
-      <div class="annotated-wrapper">
-        <img src={annotatedUrl} alt="Annotated OCR" class="annotated-image" />
-      </div>
+    {#if error}
+      <p class="text-sm font-medium text-error">{error}</p>
     {/if}
+  </form>
 
-    <div class="mapping-grid">
-      <div class="detect-column">
-        <h3 class="text-sm font-semibold text-foreground mb-2">Deteksi OCR</h3>
+  {#if scanData}
+    <div class="grid gap-6 lg:grid-cols-[380px,1fr]">
+      <section class="card space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-semibold text-fg">Deteksi OCR</h2>
+            <p class="text-sm text-muted">Tarik ke kolom tujuan atau klik tombol cepat.</p>
+          </div>
+          <div class="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-fg">
+            Hal {detections.length === 0 ? 0 : detectionPage + 1}/{totalDetectionPages}
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+          <button
+            class="h-11 rounded-2xl border border-border bg-white px-4 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60"
+            type="button"
+            on:click={prevDetectionPage}
+            disabled={detectionPage === 0}
+          >
+            Sebelumnya
+          </button>
+          <button
+            class="h-11 rounded-2xl border border-border bg-white px-4 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60"
+            type="button"
+            on:click={nextDetectionPage}
+            disabled={detectionPage >= totalDetectionPages - 1}
+          >
+            Selanjutnya
+          </button>
+        </div>
+
         {#if detections.length === 0}
-          <p class="text-muted text-sm">Tidak ada deteksi terstruktur.</p>
+          <div class="rounded-2xl border border-border bg-bg px-4 py-6 text-sm text-muted">
+            Tidak ada deteksi terstruktur. Coba unggah ulang foto dengan pencahayaan lebih terang.
+          </div>
         {:else}
-          <div class="detects-grid">
-            {#each detections as det}
+          <div class="space-y-3">
+            {#each pagedDetections as det}
               <div
-                class="detect-card"
+                class="rounded-2xl border border-border bg-card p-4 shadow-soft transition hover:border-brand/40 focus-within:ring-2 focus-within:ring-brand/40"
                 role="button"
                 tabindex="0"
                 draggable="true"
@@ -262,355 +344,300 @@
                   }
                 }}
               >
-                <div class="flex justify-between text-xs text-muted">
+                <div class="flex items-center justify-between text-sm text-muted">
                   <span>#{det.index}</span>
                   {#if det.score !== undefined}
-                    <span>score: {det.score?.toFixed(2)}</span>
+                    <span>skor: {det.score?.toFixed(2)}</span>
                   {/if}
                 </div>
-                <p class="text-foreground text-sm">{det.text}</p>
-                <div class="detect-actions">
-                  <button type="button" on:click={() => applyDetectionToField(det, 'date')}>Tanggal</button>
-                  <button type="button" on:click={() => applyDetectionToField(det, 'item')}>Item</button>
-                  <button type="button" on:click={() => applyDetectionToField(det, 'qty')}>Qty</button>
-                  <button type="button" on:click={() => applyDetectionToField(det, 'price')}>Harga</button>
-                  <button type="button" on:click={() => applyDetectionToField(det, 'total')}>Total</button>
+                <p class="mt-2 text-base font-semibold text-fg">{det.text}</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={() => applyDetectionToField(det, 'date')}
+                  >
+                    Tanggal
+                  </button>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={() => applyDetectionToField(det, 'item')}
+                  >
+                    Nama Barang
+                  </button>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={() => applyDetectionToField(det, 'qty')}
+                  >
+                    Jumlah
+                  </button>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={() => applyDetectionToField(det, 'price')}
+                  >
+                    Harga
+                  </button>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={() => applyDetectionToField(det, 'total')}
+                  >
+                    Total
+                  </button>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={() => applyDetectionToField(det, 'phone')}
+                  >
+                    No. HP
+                  </button>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={() => applyDetectionToField(det, 'address')}
+                  >
+                    Alamat
+                  </button>
                 </div>
               </div>
             {/each}
           </div>
         {/if}
-      </div>
 
-      <div class="rows-column">
-        <h3 class="text-sm font-semibold text-foreground mb-2">Baris yang akan disimpan</h3>
-        <div class="rows">
-          {#each rows as row, idx}
-            <div
-              class={`row ${idx === activeRow ? 'active' : ''}`}
-              role="button"
-              tabindex="0"
-              on:click={() => (activeRow = idx)}
-              on:keydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  activeRow = idx;
-                }
-              }}
+        {#if annotatedUrl}
+          <div class="rounded-2xl border border-border bg-card p-3 shadow-soft">
+            <p class="mb-2 text-sm font-semibold text-fg">Pratinjau anotasi OCR</p>
+            <img src={annotatedUrl} alt="Annotated OCR" class="h-auto w-full rounded-xl border border-border object-contain" />
+          </div>
+        {/if}
+      </section>
+
+      <section class="space-y-4">
+        <div class="card space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="text-xl font-semibold text-fg">Baris yang akan disimpan</h3>
+              <p class="text-sm text-muted">Klik baris untuk aktif, semua input tinggi 48px.</p>
+            </div>
+            <button
+              class="h-11 rounded-2xl border border-border bg-white px-4 text-sm font-semibold text-fg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+              type="button"
+              on:click={addRow}
             >
-              <div class="row-head">
-                <span class="badge">Row {idx + 1}</span>
-                {#if idx === activeRow}
-                  <span class="badge primary-badge">Aktif</span>
-                {/if}
-                <button class="ghost danger small" type="button" on:click={(e) => { e.stopPropagation(); removeRow(idx); }}>
-                  Hapus
-                </button>
+              Tambah baris
+            </button>
+          </div>
+
+          <div class="flex flex-col gap-4">
+            {#each rows as row, idx}
+              <div
+                class={`rounded-2xl border bg-card p-4 shadow-soft transition hover:border-brand/40 focus-within:ring-2 focus-within:ring-brand/40 ${idx === activeRow ? 'border-brand' : 'border-border'}`}
+                role="button"
+                tabindex="0"
+                on:click={() => (activeRow = idx)}
+                on:keydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    activeRow = idx;
+                  }
+                }}
+              >
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 text-sm text-muted">
+                    <span class="rounded-full bg-slate-100 px-3 py-1 text-fg">Baris {idx + 1}</span>
+                    {#if idx === activeRow}
+                      <span class="rounded-full bg-brand/10 px-3 py-1 text-sm font-semibold text-brand">Aktif</span>
+                    {/if}
+                  </div>
+                  <button
+                    class="inline-flex h-11 items-center justify-center rounded-2xl border border-error/50 px-4 text-sm font-semibold text-error hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                    type="button"
+                    on:click={(e) => {
+                      e.stopPropagation();
+                      removeRow(idx);
+                    }}
+                  >
+                    Hapus
+                  </button>
+                </div>
+
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                  <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'date')}>
+                    <label class="block text-sm font-semibold text-fg" for={`tanggal-${idx}`}>Tanggal</label>
+                    <input
+                      id={`tanggal-${idx}`}
+                      class={inputClass}
+                      placeholder="YYYY-MM-DD"
+                      value={row.date}
+                      on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)}
+                    />
+                    <p class="mt-1 text-xs text-muted">Format: YYYY-MM-DD</p>
+                  </div>
+                  <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'item')}>
+                    <label class="block text-sm font-semibold text-fg" for={`item-${idx}`}>Nama barang</label>
+                    <input
+                      id={`item-${idx}`}
+                      class={inputClass}
+                      placeholder="Nama barang"
+                      value={row.item}
+                      on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)}
+                    />
+                  </div>
+                  <div class="grid gap-4 md:col-span-2 md:grid-cols-2">
+                    <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'qty')}>
+                      <label class="block text-sm font-semibold text-fg" for={`qty-${idx}`}>Qty</label>
+                      <input
+                        id={`qty-${idx}`}
+                        class={inputClass}
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={row.qty}
+                        on:input={(e) => updateField(idx, 'qty', (e.target as HTMLInputElement).value)}
+                      />
+                    </div>
+                    <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'unit')}>
+                      <label class="block text-sm font-semibold text-fg" for={`unit-${idx}`}>Unit</label>
+                      <input
+                        id={`unit-${idx}`}
+                        class={inputClass}
+                        placeholder="pcs/kg"
+                        value={row.unit ?? ''}
+                        on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)}
+                      />
+                      <p class="mt-1 text-xs text-muted">Gunakan singkatan sederhana.</p>
+                    </div>
+                  </div>
+                  <div class="grid gap-4 md:col-span-2 md:grid-cols-2">
+                    <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'price')}>
+                      <label class="block text-sm font-semibold text-fg" for={`price-${idx}`}>Harga</label>
+                      <input
+                        id={`price-${idx}`}
+                        class={inputClass}
+                        type="number"
+                        min="0"
+                        value={row.price ?? ''}
+                        on:input={(e) => updateField(idx, 'price', (e.target as HTMLInputElement).value)}
+                      />
+                    </div>
+                    <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'total')}>
+                      <label class="block text-sm font-semibold text-fg" for={`total-${idx}`}>Total</label>
+                      <input
+                        id={`total-${idx}`}
+                        class={inputClass}
+                        type="number"
+                        min="0"
+                        value={row.total ?? ''}
+                        on:input={(e) => updateField(idx, 'total', (e.target as HTMLInputElement).value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-fg" for={`type-${idx}`}>Type</label>
+                    <select
+                      id={`type-${idx}`}
+                      class={inputClass}
+                      value={row.type ?? ''}
+                      on:change={(e) => updateField(idx, 'type', (e.target as HTMLSelectElement).value)}
+                    >
+                      <option value="penjualan">Penjualan</option>
+                      <option value="pengeluaran">Pengeluaran</option>
+                      <option value="lainnya">Lainnya</option>
+                    </select>
+                  </div>
+                  <div on:dragover|preventDefault on:drop={(e) => onDropField(e, 'phone')}>
+                    <label class="block text-sm font-semibold text-fg" for={`phone-${idx}`}>No. HP</label>
+                    <input
+                      id={`phone-${idx}`}
+                      class={inputClass}
+                      placeholder="08123456789"
+                      value={row.phone ?? ''}
+                      on:input={(e) => updateField(idx, 'phone', (e.target as HTMLInputElement).value)}
+                    />
+                    <p class="mt-1 text-xs text-muted">Gunakan 10-13 digit tanpa spasi.</p>
+                  </div>
+                  <div class="md:col-span-2" on:dragover|preventDefault on:drop={(e) => onDropField(e, 'address')}>
+                    <label class="block text-sm font-semibold text-fg" for={`address-${idx}`}>Alamat</label>
+                    <textarea
+                      id={`address-${idx}`}
+                      class={textareaClass}
+                      rows="2"
+                      placeholder="Alamat lengkap"
+                      value={row.address ?? ''}
+                      on:input={(e) => updateField(idx, 'address', (e.target as HTMLTextAreaElement).value)}
+                    ></textarea>
+                  </div>
+                </div>
               </div>
-              <div class="row-fields horizontal-fields">
-                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'date')}>
-                  <span>Tanggal</span>
-                  <input
-                    class="input"
-                    placeholder="YYYY-MM-DD"
-                    value={row.date}
-                    on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)}
-                  />
-                </label>
-                <label class="wide" on:dragover|preventDefault on:drop={(e) => onDropField(e, 'item')}>
-                  <span>Item</span>
-                  <input
-                    class="input"
-                    placeholder="Nama barang"
-                    value={row.item}
-                    on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)}
-                  />
-                </label>
-                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'qty')}>
-                  <span>Qty</span>
-                  <input
-                    class="input"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={row.qty}
-                    on:input={(e) => updateField(idx, 'qty', (e.target as HTMLInputElement).value)}
-                  />
-                </label>
-                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'unit')}>
-                  <span>Unit</span>
-                  <input
-                    class="input"
-                    placeholder="pcs/kg"
-                    value={row.unit ?? ''}
-                    on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)}
-                  />
-                </label>
-                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'price')}>
-                  <span>Harga</span>
-                  <input
-                    class="input"
-                    type="number"
-                    min="0"
-                    value={row.price ?? ''}
-                    on:input={(e) => updateField(idx, 'price', (e.target as HTMLInputElement).value)}
-                  />
-                </label>
-                <label on:dragover|preventDefault on:drop={(e) => onDropField(e, 'total')}>
-                  <span>Total</span>
-                  <input
-                    class="input"
-                    type="number"
-                    min="0"
-                    value={row.total ?? ''}
-                    on:input={(e) => updateField(idx, 'total', (e.target as HTMLInputElement).value)}
-                  />
-                </label>
-                <label>
-                  <span>Type</span>
-                  <select class="input" value={row.type ?? ''} on:change={(e) => updateField(idx, 'type', (e.target as HTMLSelectElement).value)}>
-                    <option value="penjualan">Penjualan</option>
-                    <option value="pengeluaran">Pengeluaran</option>
-                    <option value="lainnya">Lainnya</option>
-                  </select>
-                </label>
+            {/each}
+          </div>
+
+          <div class="pt-2">
+            <button
+              class="brand-gradient flex h-14 w-full items-center justify-center rounded-2xl px-6 text-lg font-semibold text-white shadow-soft transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none disabled:opacity-60"
+              type="button"
+              on:click={proceedToReview}
+            >
+              Simpan & lanjut ke review
+            </button>
+          </div>
+        </div>
+
+        <div class="card space-y-4">
+          <div>
+            <h3 class="text-lg font-semibold text-fg">Contoh format pengisian</h3>
+            <p class="text-sm text-muted">Label di atas input, helper jelas, dan error berwarna merah.</p>
+          </div>
+          <div class="space-y-6">
+            <div>
+              <label for="tanggal-contoh" class="mb-1 block text-sm font-semibold text-fg">Tanggal</label>
+              <input id="tanggal-contoh" type="date" class={inputClass} value="2025-01-01" />
+              <p class="mt-1 text-xs text-muted">Format: YYYY-MM-DD</p>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label for="item-contoh" class="mb-1 block text-sm font-semibold text-fg">Item</label>
+                <input id="item-contoh" type="text" class={inputClass} placeholder="Nama barang" value="Beras Ramos" />
+              </div>
+              <div>
+                <label for="qty-contoh" class="mb-1 block text-sm font-semibold text-fg">Qty</label>
+                <input id="qty-contoh" type="number" inputmode="decimal" class={inputClass} value="2" />
               </div>
             </div>
-          {/each}
-        </div>
-        <div class="mt-3 flex justify-end gap-2">
-          <button class="primary" type="button" on:click={proceedToReview}>Simpan & lanjut ke review</button>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
-</div>
 
-<style>
-  :global(:root) {
-    --bg: #050816;
-    --surface: #0f172a;
-    --surface-muted: #111827;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --primary: linear-gradient(90deg, #22d3ee, #2563eb);
-    --border: #1f2937;
-    color-scheme: dark;
-  }
-  :global(body) {
-    background: var(--bg);
-    color: var(--text);
-    transition: background 0.2s ease, color 0.2s ease;
-  }
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 16px;
-    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.12);
-  }
-  .gradient {
-    background: radial-gradient(circle at 20% 20%, rgba(96, 165, 250, 0.15), transparent 30%),
-      radial-gradient(circle at 80% 0%, rgba(14, 165, 233, 0.2), transparent 35%),
-      var(--surface);
-  }
-  .frosted {
-    backdrop-filter: blur(12px);
-  }
-  .text-foreground {
-    color: var(--text);
-  }
-  .text-muted {
-    color: var(--muted);
-  }
-  .primary {
-    width: 100%;
-    border: none;
-    border-radius: 12px;
-    padding: 14px;
-    font-weight: 700;
-    color: #ffffff;
-    background-image: var(--primary);
-    transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25);
-  }
-  .primary:disabled {
-    opacity: 0.6;
-  }
-  .primary:not(:disabled):hover {
-    transform: translateY(-1px);
-    box-shadow: 0 16px 32px rgba(34, 211, 238, 0.28);
-  }
-  .ghost {
-    border-radius: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    background: var(--surface-muted);
-    color: var(--text);
-    font-weight: 600;
-  }
-  .ghost.small {
-    padding: 8px 10px;
-    font-size: 12px;
-  }
-  .ghost.danger {
-    border-color: #f87171;
-    color: #fca5a5;
-  }
-  .file-row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    background: var(--surface-muted);
-    border: 1px dashed var(--border);
-    border-radius: 12px;
-    padding: 10px 12px;
-  }
-  .file-button {
-    cursor: pointer;
-    background-image: var(--primary);
-    color: #ffffff;
-    font-weight: 700;
-    padding: 10px 14px;
-    border-radius: 10px;
-    border: none;
-    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
-    transition: transform 0.1s ease, box-shadow 0.2s ease;
-  }
-  .file-button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 26px rgba(34, 211, 238, 0.28);
-  }
-  .file-name {
-    flex: 1;
-    font-size: 0.9rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .text-error {
-    color: #f87171;
-  }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  .annotated-wrapper {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
-    background: var(--surface-muted);
-  }
-  .annotated-image {
-    width: 100%;
-    border-radius: 8px;
-    object-fit: contain;
-  }
-  .mapping-grid {
-    display: grid;
-    grid-template-columns: 1fr 1.2fr;
-    gap: 16px;
-    overflow-x: hidden;
-  }
-  .detect-column,
-  .rows-column {
-    background: var(--surface-muted);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px;
-  }
-  .detects-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-  }
-  .detect-card {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px;
-    background: var(--surface);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .detect-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .detect-actions button {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 12px;
-    background: var(--surface-muted);
-    color: var(--text);
-  }
-  .rows {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 460px;
-    overflow-y: auto;
-  }
-  .row {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
-    background: var(--surface);
-    cursor: pointer;
-  }
-  .row.active {
-    border-color: #22d3ee;
-    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.4);
-  }
-  .row-head {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  .badge {
-    border-radius: 999px;
-    padding: 4px 8px;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .primary-badge {
-    border-color: rgba(34, 211, 238, 0.7);
-    color: #22d3ee;
-  }
-  .row-fields {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 10px;
-  }
-  .row-fields.horizontal-fields {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-  .row-fields label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 12px;
-    color: var(--muted);
-    padding: 6px;
-    border: 1px dashed transparent;
-    border-radius: 8px;
-  }
-  .row-fields label:focus-within {
-    border-color: rgba(34, 211, 238, 0.5);
-  }
-  .row-fields label.wide {
-    grid-column: span 2;
-  }
-</style>
+            <div class="grid gap-4 md:grid-cols-3">
+              <div>
+                <label class="mb-1 block text-sm font-semibold text-fg" for="unit-contoh">Unit</label>
+                <input id="unit-contoh" type="text" class={inputClass} value="kg" />
+                <p class="mt-1 text-xs text-muted">Gunakan singkatan sederhana.</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-semibold text-fg" for="harga-contoh">Harga</label>
+                <input
+                  id="harga-contoh"
+                  type="number"
+                  class={`${inputClass} border-error focus:border-error focus:ring-error/30`}
+                  value=""
+                  placeholder="0"
+                />
+                <p class="mt-1 text-xs font-semibold text-error">Harus diisi. Contoh: 25000</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-semibold text-fg" for="type-contoh">Type</label>
+                <select id="type-contoh" class={inputClass} value="penjualan">
+                  <option value="penjualan">Penjualan</option>
+                  <option value="pengeluaran">Pengeluaran</option>
+                  <option value="lainnya">Lainnya</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  {/if}
+</main>

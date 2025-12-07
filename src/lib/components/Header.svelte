@@ -10,13 +10,13 @@
   });
 </script>
 
-<header class="sticky top-0 z-10 bg-slate-900/50 backdrop-blur border-b border-slate-800/70 px-4 py-3 flex items-center justify-between">
+<header class="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/90 px-4 py-3 backdrop-blur shadow-soft">
   <div>
-    <p class="text-sm text-slate-400">Catat Warung</p>
-    <h1 class="text-xl font-semibold text-slate-100">{$title}</h1>
+    <p class="text-sm text-muted">Catat Warung</p>
+    <h1 class="text-xl font-semibold text-fg">{$title}</h1>
   </div>
-  <div class="flex gap-3 items-center text-xs text-slate-400">
-    <span class="px-2 py-1 rounded-full border border-slate-700">Online</span>
-    <a class="underline text-sky-300" href="/dashboard">Dashboard</a>
+  <div class="flex items-center gap-3 text-xs text-muted">
+    <span class="rounded-full border border-border px-2 py-1 text-fg">Online</span>
+    <a class="font-semibold text-brand underline decoration-brand/50 decoration-2 underline-offset-4" href="/dashboard">Dashboard</a>
   </div>
 </header>
