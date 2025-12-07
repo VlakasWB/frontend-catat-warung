@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import type { ParsedRow, ScanResult } from '$lib/types';
 
@@ -38,35 +39,48 @@
     rows = rows.filter((_, i) => i !== idx);
   };
 
+  const toNumberOrUndefined = (value: string) => {
+    const parsed = Number(value);
+    return value === '' || !Number.isFinite(parsed) ? undefined : parsed;
+  };
+
   const updateField = (idx: number, field: keyof ParsedRow, value: string) => {
     rows = rows.map((row, i) =>
       i === idx
         ? {
             ...row,
-            [field]: field === 'qty' || field === 'price' || field === 'total' ? Number(value) : value
+            [field]:
+              field === 'qty' || field === 'price' || field === 'total'
+                ? toNumberOrUndefined(value)
+                : value
           }
         : row
     );
   };
 
   const save = async () => {
+    if (rows.length === 0) return;
     saving = true;
     status = null;
-    const response = await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows })
-    });
-    if (response.ok) {
-    status = 'Tersimpan ke database.';
-    sessionStorage.removeItem('scanResult');
-    // Redirect to dashboard so user can immediately see the saved data
-    goto('/dashboard');
-  } else {
-    status = 'Gagal simpan.';
-  }
-  saving = false;
-};
+    try {
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows })
+      });
+      if (response.ok) {
+        status = 'Tersimpan ke database.';
+        sessionStorage.removeItem('scanResult');
+        goto('/dashboard');
+      } else {
+        status = 'Gagal simpan.';
+      }
+    } catch (err) {
+      status = err instanceof Error ? err.message : 'Gagal simpan.';
+    } finally {
+      saving = false;
+    }
+  };
 </script>
 
 <div class="space-y-6">

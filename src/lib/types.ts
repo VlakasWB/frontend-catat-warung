@@ -25,4 +25,6 @@ export type ScanResult = {
   annotated_image_path?: string;
   image_width?: number;
   image_height?: number;
+  detection_text_path?: string;
+  detection_json_path?: string;
 };

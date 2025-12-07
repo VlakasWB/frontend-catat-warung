@@ -41,7 +41,8 @@
   };
 
   const parseNumberFromText = (text: string): number | null => {
-    const cleaned = text.replace(/[^\d.,-]/g, '').replace(',', '.');
+    const cleaned = text.replace(/[^\d.,-]/g, '').replace(',', '.').trim();
+    if (!cleaned) return null;
     const num = Number(cleaned);
     return Number.isFinite(num) ? num : null;
   };
@@ -192,13 +193,13 @@
         </div>
       {/if}
 
-      <div class="grid-cols">
+      <div class="stacked">
         <div class="column">
           <h3 class="text-sm font-semibold text-foreground mb-2">Deteksi OCR</h3>
           {#if detections.length === 0}
             <p class="text-muted text-sm">Tidak ada deteksi terstruktur.</p>
           {:else}
-            <div class="detections">
+            <div class="detects-horizontal">
               {#each detections as det}
                 <div class="detect-card">
                   <div class="flex justify-between text-xs text-muted">
@@ -209,11 +210,11 @@
                   </div>
                   <p class="text-foreground text-sm">{det.text}</p>
                   <div class="detect-actions">
-                    <button type="button" on:click={() => applyDetectionToField(det, 'date')}>Set Tanggal</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'item')}>Set Item</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'qty')}>Set Qty</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'price')}>Set Harga</button>
-                    <button type="button" on:click={() => applyDetectionToField(det, 'total')}>Set Total</button>
+                    <button type="button" on:click={() => applyDetectionToField(det, 'date')}>Tanggal</button>
+                    <button type="button" on:click={() => applyDetectionToField(det, 'item')}>Item</button>
+                    <button type="button" on:click={() => applyDetectionToField(det, 'qty')}>Qty</button>
+                    <button type="button" on:click={() => applyDetectionToField(det, 'price')}>Harga</button>
+                    <button type="button" on:click={() => applyDetectionToField(det, 'total')}>Total</button>
                   </div>
                 </div>
               {/each}
@@ -222,8 +223,11 @@
         </div>
 
         <div class="column">
-          <h3 class="text-sm font-semibold text-foreground mb-2">Baris yang akan disimpan</h3>
-          <div class="rows">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-foreground">Baris yang akan disimpan</h3>
+            <button class="ghost small" type="button" on:click={addRow}>Tambah baris</button>
+          </div>
+          <div class="rows horizontal">
             {#each rows as row, idx}
               <div
                 class={`row ${idx === activeRow ? 'active' : ''}`}
@@ -246,33 +250,51 @@
                     <span class="badge primary-badge">Aktif</span>
                   {/if}
                 </div>
-                <div class="row-fields">
+                <div class="row-fields horizontal-fields">
                   <label>
                     <span>Tanggal</span>
-                    <input class="input" value={row.date} on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)} />
+                    <input
+                      class="input"
+                      placeholder="YYYY-MM-DD"
+                      value={row.date}
+                      on:input={(e) => updateField(idx, 'date', (e.target as HTMLInputElement).value)}
+                    />
                   </label>
-                  <label>
+                  <label class="wide">
                     <span>Item</span>
-                    <input class="input" value={row.item} on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)} />
+                    <input
+                      class="input"
+                      placeholder="Nama barang"
+                      value={row.item}
+                      on:input={(e) => updateField(idx, 'item', (e.target as HTMLInputElement).value)}
+                    />
                   </label>
                   <label>
                     <span>Qty</span>
                     <input
                       class="input"
                       type="number"
+                      min="0"
+                      step="1"
                       value={row.qty}
                       on:input={(e) => updateField(idx, 'qty', (e.target as HTMLInputElement).value)}
                     />
                   </label>
                   <label>
                     <span>Unit</span>
-                    <input class="input" value={row.unit ?? ''} on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)} />
+                    <input
+                      class="input"
+                      placeholder="pcs/kg"
+                      value={row.unit ?? ''}
+                      on:input={(e) => updateField(idx, 'unit', (e.target as HTMLInputElement).value)}
+                    />
                   </label>
                   <label>
                     <span>Harga</span>
                     <input
                       class="input"
                       type="number"
+                      min="0"
                       value={row.price ?? ''}
                       on:input={(e) => updateField(idx, 'price', (e.target as HTMLInputElement).value)}
                     />
@@ -282,6 +304,7 @@
                     <input
                       class="input"
                       type="number"
+                      min="0"
                       value={row.total ?? ''}
                       on:input={(e) => updateField(idx, 'total', (e.target as HTMLInputElement).value)}
                     />
@@ -299,7 +322,6 @@
             {/each}
           </div>
           <div class="mt-3 flex justify-end gap-2">
-            <button class="ghost" type="button" on:click={addRow}>Tambah baris</button>
             <button class="primary" type="button" on:click={proceedToReview}>Simpan & lanjut ke review</button>
           </div>
         </div>
@@ -453,6 +475,14 @@
     flex-direction: column;
     gap: 6px;
   }
+  .detects-horizontal {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 1fr);
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
   .detect-actions {
     display: flex;
     flex-wrap: wrap;
@@ -509,11 +539,22 @@
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 8px;
   }
+  .row-fields.horizontal-fields {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
   .row-fields label {
     display: flex;
     flex-direction: column;
     gap: 4px;
     font-size: 12px;
     color: var(--muted);
+  }
+  .row-fields label.wide {
+    grid-column: span 2;
+  }
+  .stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 </style>

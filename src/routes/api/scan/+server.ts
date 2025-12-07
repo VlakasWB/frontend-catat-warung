@@ -32,5 +32,19 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
   }
 
   const data = await response.json();
-  return json(data);
+
+  const withBase = (maybePath?: string | null) => {
+    if (!maybePath) return maybePath;
+    if (/^https?:\/\//i.test(maybePath)) return maybePath;
+    const base = OCR_SERVICE_URL.replace(/\/$/, '');
+    const normalized = maybePath.replace(/^\/+/, '');
+    return `${base}/${normalized}`;
+  };
+
+  return json({
+    ...data,
+    annotated_image_path: withBase(data.annotated_image_path),
+    detection_text_path: withBase(data.detection_text_path),
+    detection_json_path: withBase(data.detection_json_path)
+  });
 };
