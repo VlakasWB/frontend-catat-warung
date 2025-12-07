@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: #0f172a;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+.card {
+  @apply bg-slate-800/60 border border-slate-700 rounded-2xl p-6 shadow-xl;
+}
+
+table {
+  border-collapse: collapse;
+}

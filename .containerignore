@@ -1,0 +1,12 @@
+node_modules
+.pnpm-store
+.svelte-kit
+build
+dist
+.env
+.env.*
+npm-debug.log
+pnpm-debug.log
+.DS_Store
+*.local
+*.swp
