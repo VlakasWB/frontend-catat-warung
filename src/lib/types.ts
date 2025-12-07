@@ -28,3 +28,10 @@ export type ScanResult = {
   detection_text_path?: string;
   detection_json_path?: string;
 };
+
+export type OutputFile = {
+  name: string;
+  url: string;
+  size_bytes: number;
+  modified_at: string;
+};
