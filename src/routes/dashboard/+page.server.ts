@@ -36,7 +36,7 @@ export const load: PageServerLoad = async () => {
     const rawMsg = err instanceof Error ? err.message : String(err);
     const needsMigration = /Transaction\.phone|Transaction\.address|no such column/i.test(rawMsg);
     const friendly = needsMigration
-      ? 'Skema database belum sesuai. Jalankan prisma migrate/dev push atau tambahkan kolom phone/address sesuai schema.'
+      ? 'Skema database belum sesuai (kolom phone/address belum ada). Mohon backend Python memperbarui skema DB agar sesuai schema prisma.'
       : rawMsg || 'Gagal memuat dashboard';
     return {
       summary: { today: 0, month: 0, count: 0 },
